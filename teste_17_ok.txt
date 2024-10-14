@@ -1,0 +1,160 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+#include <string.h>
+
+typedef struct {
+    int hora, min, seg;
+} t_time_stamp;
+
+typedef struct {
+    int id;
+    int sensor_type;
+    char medida[10];
+    double alpha;
+    t_time_stamp timestamp;
+} SensorData;
+
+typedef struct node {
+    SensorData data;
+    struct node *left;
+    struct node *right;
+} Node;
+
+Node* createNode(SensorData data) {
+    Node* newNode = malloc(sizeof(Node));
+    if (!newNode) {
+        printf("Erro na alocação de memória\n");
+        exit(0);
+    }
+    newNode->data = data;
+    newNode->left = newNode->right = NULL;
+    return newNode;
+}
+
+Node* insertNode(Node* root, SensorData data) {
+    if (root == NULL)
+        return createNode(data);
+
+    // Comparando os atributos para decidir onde inserir o novo nó
+    if (data.id < root->data.id ||
+        (data.id == root->data.id && data.sensor_type < root->data.sensor_type) ||
+        (data.id == root->data.id && data.sensor_type == root->data.sensor_type && data.timestamp.hora < root->data.timestamp.hora)) {
+        root->left = insertNode(root->left, data);
+    } else {
+        root->right = insertNode(root->right, data);
+    }
+
+    return root;
+}
+
+void inorderTraversal(Node* root) {
+    if (root != NULL) {
+        inorderTraversal(root->left);
+        printf("%d\t%d\t%s\t%02d:%02d:%02d\t%.2lf\n", root->data.id, root->data.sensor_type, root->data.medida, root->data.timestamp.hora, root->data.timestamp.min, root->data.timestamp.seg, root->data.alpha);
+        inorderTraversal(root->right);
+    }
+}
+
+void calcularMediasMovel(Node* root) {
+    if (root == NULL) return;
+
+    calcularMediasMovel(root->left);
+
+    static int previous_hour = -1;
+    static double sum = 0;
+    static int count = 0;
+
+    if (root->data.timestamp.hora == previous_hour) {
+        double medida = atof(root->data.medida);
+        sum += medida;
+        count++;
+    } else {
+        if (count > 0) {
+            double media_movel = sum / count;
+            printf("%d\t%d\t%.2lf\t%02d:00:00\t%.2lf\n", root->data.id, root->data.sensor_type, media_movel, previous_hour, root->data.alpha);
+        }
+        count = 1;
+        sum = atof(root->data.medida);
+    }
+
+    previous_hour = root->data.timestamp.hora;
+
+    calcularMediasMovel(root->right);
+
+    if (root->right == NULL && count > 0) { // Tratamento especial para o último grupo de dados
+        double media_movel = sum / count;
+        printf("%d\t%d\t%.2lf\t%02d:00:00\t%.2lf\n", root->data.id, root->data.sensor_type, media_movel, previous_hour, root->data.alpha);
+    }
+}
+
+int compareSensorData(const void *a, const void *b) {
+    SensorData *dataA = (SensorData *)a;
+    SensorData *dataB = (SensorData *)b;
+
+    if (dataA->id != dataB->id) {
+        return dataA->id - dataB->id;
+    } else if (dataA->sensor_type != dataB->sensor_type) {
+        return dataA->sensor_type - dataB->sensor_type;
+    } else {
+        return dataA->timestamp.hora - dataB->timestamp.hora;
+    }
+}
+
+int main(int argc, char const *argv[]) {
+    srand(time(NULL));
+    char medida[10];
+
+    int samples, reps = 24; 
+    int tipos = 4;
+    double alphas[] = {0.0, 0.2, 0.22, 0.25, 0.5}; 
+
+    scanf("%d", &samples);
+    int ids[samples + 1]; 
+    for(int i = 0; i <= samples; i++)
+        ids[i] = -1;
+
+    Node* root = NULL; // Inicializando a árvore
+
+    for (int i = 1; i <= (samples * reps); i++) {
+        int id = rand() % samples + 1;
+
+        int t_sensor = (ids[id] == -1 ? rand() % tipos + 1 : ids[id]);
+        ids[id] = t_sensor;
+
+        t_time_stamp t = { .hora = rand() % 24, .min = rand() % 60, .seg = rand() % 60 };
+        SensorData new_data;
+        new_data.id = id;
+        new_data.sensor_type = t_sensor;
+        new_data.timestamp = t;
+        new_data.alpha = alphas[t_sensor];
+
+        if (t_sensor == 1){ //temperatura
+            double temp = rand() % 100 + 1;
+            sprintf(medida,"%.2lf", temp);
+            strcpy(new_data.medida, medida);
+        } else if (t_sensor == 2){ // luminosidade
+            int lumen = rand() % 1000;
+            sprintf(medida, "%d", lumen);
+            strcpy(new_data.medida, medida);
+        } else if(t_sensor == 3){ // movimento
+            int duracao = rand() % 1000;
+            sprintf(medida, "%d", duracao); 
+            strcpy(new_data.medida, medida);
+        } else { // umidade
+            int umid = rand() % 100;
+            sprintf(medida, "%d", umid); 
+            strcpy(new_data.medida, medida);
+        }
+
+        root = insertNode(root, new_data); // Inserindo os dados na árvore
+    }   
+
+    printf("Saida do código fornecido:\n");
+    inorderTraversal(root); // Realizando a travessia em ordem para ordenar os elementos
+
+    printf("\nSaida ajustada:\n");
+    calcularMediasMovel(root);
+
+    return 0;
+}
